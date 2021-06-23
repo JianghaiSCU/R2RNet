@@ -8,9 +8,9 @@ This is a Pytorch implementation of R2RNet.
 1. Python 3.x 
 2. Pytorch 1.x.0
 ## Dataset
-You can download the LSRW dataset from:链接：https://pan.baidu.com/s/1G0k_AZ2nylwm_xNkWBs7mA (code:scua)
+You can download the LSRW dataset from:https://pan.baidu.com/s/1G0k_AZ2nylwm_xNkWBs7mA (code:scua)
 ## Pre-trained model
-You can download the pre-trained model from:链接：https://pan.baidu.com/s/1G0k_AZ2nylwm_xNkWBs7mA (code:scua)
+You can download the pre-trained model from:https://pan.baidu.com/s/14XXmWgnWqo4EsVjjhtkSyQ (code:ckpt )
 ## Testing Usage
 python predict.py
 ## Training Usage
