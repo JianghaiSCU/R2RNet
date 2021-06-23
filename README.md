@@ -8,7 +8,8 @@ This is a Pytorch implementation of R2RNet.
 1. Python 3.x 
 2. Pytorch 1.x.0
 ## Dataset
-You can download the LSRW dataset from:https://pan.baidu.com/s/1G0k_AZ2nylwm_xNkWBs7mA (code:scua)
+You can download the LSRW dataset from:https://pan.baidu.com/s/1G0k_AZ2nylwm_xNkWBs7mA (code:scua).
+You shold download the VGG model (https://pan.baidu.com/s/1Rn2NwHt9eZgfg6hQP-DrlQ code:wmr1)and put it into ./model.
 ## Pre-trained model
 You can download the pre-trained model from:https://pan.baidu.com/s/14XXmWgnWqo4EsVjjhtkSyQ (code:ckpt )
 ## Testing Usage
