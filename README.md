@@ -1,5 +1,5 @@
 # R2RNet
-Official code of "R2RNet: Low-light Image Enhancement Via Real-low to Real-normal Network".
+Official code of "R2RNet: Low-light Image Enhancement Via Real-low to Real-normal Network".(Code borrows heavily from )
 ## Network Architecture
 ![image](https://user-images.githubusercontent.com/86350392/123072534-382ae080-d448-11eb-856c-8086578a308e.png)
 # Pytorch
