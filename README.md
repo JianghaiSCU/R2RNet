@@ -10,7 +10,8 @@ This is a Pytorch implementation of R2RNet.
 ## Dataset
 
 ## Pre-trained model
-You can download the pre-trained model from:https://pan.baidu.com/s/14XXmWgnWqo4EsVjjhtkSyQ (code:ckpt )
+You can download the pre-trained model from:https://pan.baidu.com/s/14XXmWgnWqo4EsVjjhtkSyQ (code:ckpt ).
+
 You shold download the VGG model (https://pan.baidu.com/s/1Rn2NwHt9eZgfg6hQP-DrlQ code:wmr1)and put it into ./model.
 ## Testing Usage
 python predict.py
