@@ -1,5 +1,5 @@
 # R2RNet
-Official code of "R2RNet: Low-light Image Enhancement Via Real-low to Real-normal Network".
+Official code of "R2RNet: Low-light Image Enhancement Via Real-low to Real-normal Network".(Submitted to IEEE transaction on Image Processing)
 ## Network Architecture
 ![image](https://user-images.githubusercontent.com/86350392/123072534-382ae080-d448-11eb-856c-8086578a308e.png)
 # Pytorch
@@ -8,7 +8,7 @@ This is a Pytorch implementation of R2RNet.
 1. Python 3.x 
 2. Pytorch 1.x.0
 ## Dataset
-Coming soon!
+
 ## Pre-trained model
 We will release the pre-training models as soon as possible.
 
