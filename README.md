@@ -8,7 +8,7 @@ This is a Pytorch implementation of R2RNet.
 1. Python 3.x 
 2. Pytorch 1.x.0
 ## Dataset
-
+Coming soon!
 ## Pre-trained model
 We will release the pre-training models as soon as possible.
 
