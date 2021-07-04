@@ -680,8 +680,6 @@ class R2RNet(nn.Module):
         self.vgg_loss = compute_vgg_loss(R_low * I_low_3,  input_low).cuda() + compute_vgg_loss(R_high * I_high_3, input_high).cuda()
         self.recon_loss_low = F.l1_loss(R_low * I_low_3, input_low).cuda()
         self.recon_loss_high = F.l1_loss(R_high * I_high_3, input_high).cuda()
-        self.recon_loss_mutal_low = F.l1_loss(R_high * I_low_3, input_low).cuda()
-        self.recon_loss_mutal_high = F.l1_loss(R_low * I_high_3, input_high).cuda()
 
         self.loss_Decom = self.recon_loss_low + \
                           self.recon_loss_high + \
