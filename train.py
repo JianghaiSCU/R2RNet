@@ -31,11 +31,11 @@ def train(model):
     lr[10:] = lr[0] / 10.0
 
     train_low_data_names = glob(args.data_dir + '/Huawei/low/*.jpg') + \
-                           glob(args.data_dir + '/Nikon/low/*.jpg') + glob(args.data_dir + '/Others/low/*.png')
+                           glob(args.data_dir + '/Nikon/low/*.jpg')
 
     train_low_data_names.sort()
     train_high_data_names = glob(args.data_dir + '/Huawei/high/*.jpg') + \
-                           glob(args.data_dir + '/Nikon/high/*.jpg') + glob(args.data_dir + '/Others/high/*.png')
+                           glob(args.data_dir + '/Nikon/high/*.jpg')
     train_high_data_names.sort()
     eval_low_data_names = glob(args.data_dir + '/eval50/low/*.*')
     eval_low_data_names.sort()
