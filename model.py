@@ -685,8 +685,6 @@ class R2RNet(nn.Module):
 
         self.loss_Decom = self.recon_loss_low + \
                           self.recon_loss_high + \
-                          0.1 * self.recon_loss_mutal_low + \
-                          0.1 * self.recon_loss_mutal_high + \
                           self.vgg_loss
         # DenoiseNet_loss
         self.denoise_loss = F.l1_loss(denoise_R, R_high).cuda()
@@ -698,7 +696,7 @@ class R2RNet(nn.Module):
         # RelightNet_loss
         self.SSIM_loss = 1 - ssim(denoise_R * I_delta_3, input_high, win_size=3).cuda()
         self.Relight_loss = F.l1_loss(denoise_R * I_delta_3, input_high).cuda()
-        self.Relight_vgg = compute_vgg_loss(I_delta_3, I_high_3).cuda()
+        self.Relight_vgg = compute_vgg_loss(denoise_R * I_delta_3, input_high).cuda()
 
         self.loss_Relight = self.Relight_loss + \
                             self.SSIM_loss + self.Relight_vgg
