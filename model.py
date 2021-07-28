@@ -733,46 +733,46 @@ class R2RNet(nn.Module):
 
     def evaluate(self, epoch_num, eval_low_data_names, vis_dir, train_phase):
         print("Evaluating for phase %s / epoch %d..." % (train_phase, epoch_num))
+        with torch.no_grad():# Otherwise the intermediate gradient would take up huge amount of CUDA memory
+            for idx in range(len(eval_low_data_names)):
+                eval_low_img = Image.open(eval_low_data_names[idx])
+                eval_low_img = np.array(eval_low_img, dtype="float32")/255.0
+                eval_low_img = np.transpose(eval_low_img, (2, 0, 1))
+                input_low_eval = np.expand_dims(eval_low_img, axis=0)
 
-        for idx in range(len(eval_low_data_names)):
-            eval_low_img = Image.open(eval_low_data_names[idx])
-            eval_low_img = np.array(eval_low_img, dtype="float32")/255.0
-            eval_low_img = np.transpose(eval_low_img, (2, 0, 1))
-            input_low_eval = np.expand_dims(eval_low_img, axis=0)
+                if train_phase == "Decom":
+                    self.forward(input_low_eval, input_low_eval)
+                    result_1 = self.output_R_low
+                    result_2 = self.output_I_low
+                    input = np.squeeze(input_low_eval)
+                    result_1 = np.squeeze(result_1)
+                    result_2 = np.squeeze(result_2)
+                    cat_image = np.concatenate([input, result_1, result_2], axis=2)
+                if train_phase == 'Denoise':
+                    self.forward(input_low_eval, input_low_eval)
+                    result_1 = self.output_R_denoise
+                    input = np.squeeze(input_low_eval)
+                    result_1 = np.squeeze(result_1)
+                    cat_image = np.concatenate([input, result_1], axis=2)
+                if train_phase == "Relight":
+                    self.forward(input_low_eval, input_low_eval)
+                    result_1 = self.output_R_denoise
+                    result_2 = self.output_I_low
+                    result_3 = self.output_I_delta
+                    result_4 = self.output_S
+                    input = np.squeeze(input_low_eval)
+                    result_1 = np.squeeze(result_1)
+                    result_2 = np.squeeze(result_2)
+                    result_3 = np.squeeze(result_3)
+                    result_4 = np.squeeze(result_4)
+                    cat_image = np.concatenate([input, result_1, result_2, result_3, result_4], axis=2)
 
-            if train_phase == "Decom":
-                self.forward(input_low_eval, input_low_eval)
-                result_1 = self.output_R_low
-                result_2 = self.output_I_low
-                input = np.squeeze(input_low_eval)
-                result_1 = np.squeeze(result_1)
-                result_2 = np.squeeze(result_2)
-                cat_image = np.concatenate([input, result_1, result_2], axis=2)
-            if train_phase == 'Denoise':
-                self.forward(input_low_eval, input_low_eval)
-                result_1 = self.output_R_denoise
-                input = np.squeeze(input_low_eval)
-                result_1 = np.squeeze(result_1)
-                cat_image = np.concatenate([input, result_1], axis=2)
-            if train_phase == "Relight":
-                self.forward(input_low_eval, input_low_eval)
-                result_1 = self.output_R_denoise
-                result_2 = self.output_I_low
-                result_3 = self.output_I_delta
-                result_4 = self.output_S
-                input = np.squeeze(input_low_eval)
-                result_1 = np.squeeze(result_1)
-                result_2 = np.squeeze(result_2)
-                result_3 = np.squeeze(result_3)
-                result_4 = np.squeeze(result_4)
-                cat_image = np.concatenate([input, result_1, result_2, result_3, result_4], axis=2)
-
-            cat_image = np.transpose(cat_image, (1, 2, 0))
-            # print(cat_image.shape)
-            im = Image.fromarray(np.clip(cat_image * 255.0, 0, 255.0).astype('uint8'))
-            filepath = os.path.join(vis_dir, 'eval_%s_%d_%d.png' %
-                       (train_phase, idx + 1, epoch_num))
-            im.save(filepath[:-4] + '.jpg')
+                cat_image = np.transpose(cat_image, (1, 2, 0))
+                # print(cat_image.shape)
+                im = Image.fromarray(np.clip(cat_image * 255.0, 0, 255.0).astype('uint8'))
+                filepath = os.path.join(vis_dir, 'eval_%s_%d_%d.png' %
+                           (train_phase, idx + 1, epoch_num))
+                im.save(filepath[:-4] + '.jpg')
 
 
     def save(self, iter_num, ckpt_dir):
