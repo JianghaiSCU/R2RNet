@@ -14,7 +14,7 @@ You can download the LSRW dataset from: https://pan.baidu.com/s/1sprnEO4F9z_ota4
 
 If you use our code and  dataset, please cite our paper.
 ## Pre-trained model
-The pre-trained models can be download from: https://pan.baidu.com/s/1qaAVspOFIumS1iiTQNsudg (code: wmrr) 
+The pre-trained models can be download from: https://pan.baidu.com/s/1emGK8_JHNktoEn0dj5OnhQ (code: wmrr) 
 
 You shold download the VGG model (https://pan.baidu.com/s/1Rn2NwHt9eZgfg6hQP-DrlQ code:wmr1)and put it into ./model.
 ## Testing Usage
