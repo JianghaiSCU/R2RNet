@@ -1,1 +1,1 @@
-You can download ckpts from:链接：https://pan.baidu.com/s/14XXmWgnWqo4EsVjjhtkSyQ (code:ckpt ), then put the pre-trained models into Decom, Denoise, Relight, respectively.
+You can download ckpts from: https://pan.baidu.com/s/1emGK8_JHNktoEn0dj5OnhQ (code: wmrr), then put the pre-trained models into Decom, Denoise, Relight, respectively.
