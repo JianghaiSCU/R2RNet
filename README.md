@@ -11,12 +11,9 @@ This is a Pytorch implementation of R2RNet.
 2. Pytorch 1.x.0
 ## Dataset
 You can download the LSRW dataset from: https://pan.baidu.com/s/1UxFllrtRSh4E8ir8LdTb9w (code: wmr1) 
-
 If you use our code and  dataset, please cite our paper.
 ## Pre-trained model
-The pre-trained models can be download from: https://pan.baidu.com/s/1emGK8_JHNktoEn0dj5OnhQ (code: wmrr) 
-
-You shold download the VGG model (https://pan.baidu.com/s/1Rn2NwHt9eZgfg6hQP-DrlQ code:wmr1)and put it into ./model.
+We have modified the code to obtain better performance. We will release the updated code as soon as possible.
 ## Testing Usage
 python predict.py
 ## Training Usage
