@@ -38,9 +38,9 @@ def train(model):
                             glob(args.data_dir + '/Nikon/high/*.jpg') 
 
     train_high_data_names.sort()
-    eval_low_data_names = glob('./data/eval/low/*.png')
+    eval_low_data_names = glob('./data/eval/low/*.jpg')
     eval_low_data_names.sort()
-    eval_high_data_names = glob('./data/eval/high/*.png')
+    eval_high_data_names = glob('./data/eval/high/*.jpg')
     eval_high_data_names.sort()
     assert len(train_low_data_names) == len(train_high_data_names)
     print('Number of training data: %d' % len(train_low_data_names))
