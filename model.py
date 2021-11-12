@@ -9,7 +9,36 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
 import numpy as np
-from pytorch_msssim import ssim
+from pytorch_msssim import ssim, ms_ssim
+from complexPyTorch.complexLayers import ComplexConv2d, complex_relu
+from tensorboardX import SummaryWriter
+import math
+from scipy.stats import wasserstein_distance
+
+def psnr2(img1, img2):
+    mse = np.mean((img1 / 255. - img2 / 255.) ** 2)
+    if mse < 1.0e-10:
+        return 100
+    PIXEL_MAX = 1
+    return 20 * math.log10(PIXEL_MAX / math.sqrt(mse))
+
+
+def frequency_loss(im1, im2):
+    im1_fft = torch.fft.fftn(im1)
+    im1_fft_real = im1_fft.real
+    im1_fft_imag = im1_fft.imag
+    im2_fft = torch.fft.fftn(im2)
+    im2_fft_real = im2_fft.real
+    im2_fft_imag = im2_fft.imag
+    loss = 0
+    for i in range(im1.shape[0]):
+        real_loss = wasserstein_distance(im1_fft_real[i].reshape(im1_fft_real[i].shape[0]*im1_fft_real[i].shape[1]*im1_fft_real[i].shape[2]).cpu().detach(),
+                                         im2_fft_real[i].reshape(im2_fft_real[i].shape[0]*im2_fft_real[i].shape[1]*im2_fft_real[i].shape[2]).cpu().detach())
+        imag_loss = wasserstein_distance(im1_fft_imag[i].reshape(im1_fft_imag[i].shape[0]*im1_fft_imag[i].shape[1]*im1_fft_imag[i].shape[2]).cpu().detach(),
+                                         im2_fft_imag[i].reshape(im2_fft_imag[i].shape[0]*im2_fft_imag[i].shape[1]*im2_fft_imag[i].shape[2]).cpu().detach())
+        total_loss = real_loss + imag_loss
+        loss += total_loss
+    return torch.tensor(loss / (im1.shape[2] * im2.shape[3]))
 
 
 class Vgg16(nn.Module):
@@ -78,7 +107,6 @@ def compute_vgg_loss(enhanced_result, input_high):
     loss = torch.mean((instance_norm(img_fea) - instance_norm(target_fea)) ** 2)
 
     return loss
-
 
 
 class ResidualModule0(nn.Module):
@@ -189,6 +217,92 @@ class ResidualModule3(nn.Module):
         return final_out
 
 
+class Resblock(nn.Module):
+    def __init__(self, channels, kernel_size=3, stride=1):
+        super(Resblock, self).__init__()
+
+        self.kernel_size = (kernel_size, kernel_size)
+        self.stride = (stride, stride)
+        self.activation = nn.LeakyReLU(True)
+
+        sequence = list()
+
+        sequence += [
+            nn.Conv2d(channels, channels, kernel_size=(3, 3), stride=(1, 1), padding=1, padding_mode='replicate'),
+            nn.LeakyReLU(),
+            nn.Conv2d(channels, channels, kernel_size=(3, 3), stride=(1, 1), padding=1, padding_mode='replicate'),
+        ]
+        self.model = nn.Sequential(*sequence)
+
+    def forward(self, x):
+
+        residual = x
+        output = self.activation(self.model(x) + residual)
+
+        return output
+
+
+class complex_net(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(complex_net, self).__init__()
+
+        self.complex_conv0 = ComplexConv2d(in_channels, out_channels*2, kernel_size=3, stride=1, padding=1)
+        self.complex_conv1 = ComplexConv2d(out_channels*2, out_channels*2, kernel_size=3, stride=1, padding=1)
+        self.complex_conv2 = ComplexConv2d(out_channels * 2, out_channels, kernel_size=3, stride=1, padding=1)
+
+    def forward(self, x):
+
+        residual = x
+        out0 = complex_relu(self.complex_conv0(x))
+        out1 = complex_relu(self.complex_conv1(out0))
+        out2 = complex_relu(self.complex_conv2(out1))
+        output = residual + out2
+
+        return output
+
+
+class feature_block(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(feature_block, self).__init__()
+
+        self.resblock0 = Resblock(in_channels)
+        self.complex_block = complex_net(out_channels, out_channels)
+        self.resblock1 = Resblock(out_channels)
+
+    def forward(self, x):
+
+        residual = x
+        out0 = self.resblock0(x)
+        fft_out0 = torch.fft.rfftn(out0)
+        out1 = self.complex_block(fft_out0)
+        ifft_out1 = torch.fft.irfftn(out1)
+        out2 = self.resblock1(ifft_out1)
+
+        output = residual + out2
+
+        return output
+
+
+class fft_processing(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(fft_processing, self).__init__()
+        self.complex_conv1 = ComplexConv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+
+        self.complex_block0 = complex_net(out_channels, out_channels)
+        self.complex_block1 = complex_net(out_channels, out_channels)
+
+        self.complex_conv2 = ComplexConv2d(out_channels, out_channels, kernel_size=1, stride=1, padding=0)
+
+    def forward(self, x):
+
+        conv1_out = complex_relu(self.complex_conv1(x))
+        complex_block_out0 = self.complex_block0(conv1_out)
+        complex_block_out1 = self.complex_block1(complex_block_out0)
+        conv2_out = complex_relu(self.complex_conv2(complex_block_out1))
+
+        return conv2_out
+
+
 class DecomNet(nn.Module):
     def __init__(self, channel=64, kernel_size=3):
         super(DecomNet, self).__init__()
@@ -225,7 +339,6 @@ class DecomNet(nn.Module):
         L = torch.sigmoid(out9[:, 3:4, :, :])
 
         return R, L
-
 
 
 class DenoiseNet(nn.Module):
@@ -278,7 +391,6 @@ class DenoiseNet(nn.Module):
         self.Denoiseout0 = nn.Conv2d(channel * 2, channel, kernel_size, padding=1, padding_mode='replicate')
         self.Denoiseout1 = nn.Conv2d(channel, 3, kernel_size=1, stride=1)
 
-
     def forward(self, input_L, input_R):
         input_img = torch.cat((input_R, input_L), dim=1)
         out0 = self.Relu(self.Denoise_conv0_1(input_img))
@@ -329,6 +441,52 @@ class DenoiseNet(nn.Module):
 class EnhanceModule0(nn.Module):
     def __init__(self, channel=64, kernel_size=3):
         super(EnhanceModule0, self).__init__()
+        self.activation = nn.LeakyReLU()
+        self.conv0 = nn.Conv2d(4, channel, kernel_size=(3, 3), stride=(1, 1), padding=2,
+                               dilation=(2, 2))
+        self.conv1 = nn.Conv2d(channel, channel, kernel_size=(3, 3), stride=(1, 1), padding=2,
+                               dilation=(2, 2))
+
+        self.feature_block0 = feature_block(channel, channel)
+
+        self.down_sampling = nn.Conv2d(channel, channel, kernel_size=(2, 2), stride=(2, 2), padding=0)
+
+        self.fft_processing = fft_processing(channel, channel)
+
+        self.up_sampling = nn.UpsamplingBilinear2d(scale_factor=2)
+
+        self.feature_block1 = feature_block(channel, channel)
+        self.channel_up = ComplexConv2d(4, channel, kernel_size=3, stride=1, padding=1)
+
+        self.conv2 = nn.Conv2d(channel, channel, kernel_size=(3, 3), stride=(1, 1), padding=1)
+        self.conv3 = nn.Conv2d(channel, channel, kernel_size=(1, 1), stride=(1, 1), padding=0)
+
+    def forward(self, input_img):
+        input_img_down = F.interpolate(input_img, scale_factor=0.5, mode='bilinear')
+        input_img_down_fft = torch.fft.rfftn(input_img_down)
+        input_img_down_fft_up = self.channel_up(input_img_down_fft)
+
+        out0 = self.activation(self.conv0(input_img))
+        out1 = self.activation(self.conv1(out0))
+        feature_block_out0 = self.feature_block0(out1)
+        down_sampling = self.activation(self.down_sampling(feature_block_out0))
+
+        down_sampling_fft = torch.fft.rfftn(down_sampling)
+        fft_processing_out = self.fft_processing(down_sampling_fft + input_img_down_fft_up)
+        fft_processing_out_ifft = torch.fft.irfftn(fft_processing_out + input_img_down_fft_up)
+
+        up_sampling = self.up_sampling(fft_processing_out_ifft)
+        feature_block_out1 = self.feature_block1(up_sampling + feature_block_out0)
+
+        out2 = self.activation(self.conv2(feature_block_out1 + out1))
+        out3 = self.activation(self.conv3(out2))
+
+        return out3
+
+
+class EnhanceModule1(nn.Module):
+    def __init__(self, channel=64, kernel_size=3):
+        super(EnhanceModule1, self).__init__()
 
         self.Relu = nn.LeakyReLU()
         self.Enhance_conv0_1 = nn.Conv2d(4, channel, kernel_size, padding=2, padding_mode='replicate', dilation=2)
@@ -357,27 +515,25 @@ class EnhanceModule0(nn.Module):
         self.conv17 = nn.Conv2d(channel * 4, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
         self.conv18 = nn.Conv2d(channel * 4, channel * 2, kernel_size, stride=1, padding=1, padding_mode='replicate')
         self.conv19 = nn.Conv2d(channel * 2, channel, kernel_size=1, stride=1, padding=0)
-        self.Enhance_deconv0 = nn.ConvTranspose2d(channel * 2, channel, kernel_size=2, stride=2, padding=0,
-                                                  output_padding=0)  # 24*24
+        self.Enhance_deconv0 = nn.UpsamplingBilinear2d(scale_factor=2.0)
+        self.down_channel0 = nn.Conv2d(channel*2, channel, kernel_size=1, stride=1, padding=0)
         self.conv20 = nn.Conv2d(channel * 2, channel * 2, kernel_size=1, stride=1, padding=0)
         self.conv21 = nn.Conv2d(channel * 2, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
         self.conv22 = nn.Conv2d(channel * 4, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
         self.conv23 = nn.Conv2d(channel * 4, channel * 2, kernel_size, stride=1, padding=1, padding_mode='replicate')
         self.conv24 = nn.Conv2d(channel * 2, channel, kernel_size=1, stride=1, padding=0)
-        self.Enhance_deconv1 = nn.ConvTranspose2d(channel * 2, channel, kernel_size=2, stride=2, padding=0,
-                                                  output_padding=0)  # 48*48
+        self.Enhance_deconv1 = nn.UpsamplingBilinear2d(scale_factor=2.0)
+        self.down_channel1 = nn.Conv2d(channel*2, channel, kernel_size=1, stride=1, padding=0)
         self.conv25 = nn.Conv2d(channel * 2, channel * 2, kernel_size=1, stride=1, padding=0)
         self.conv26 = nn.Conv2d(channel * 2, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
         self.conv27 = nn.Conv2d(channel * 4, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
         self.conv28 = nn.Conv2d(channel * 4, channel * 2, kernel_size, stride=1, padding=1, padding_mode='replicate')
         self.conv29 = nn.Conv2d(channel * 2, channel, kernel_size=1, stride=1, padding=0)
-        self.Enhance_deconv2 = nn.ConvTranspose2d(channel * 2, channel, kernel_size=2, stride=2, padding=0,
-                                                  output_padding=0)  # 96*96
-
+        self.Enhance_deconv2 = nn.UpsamplingBilinear2d(scale_factor=2.0)
+        self.down_channel2 = nn.Conv2d(channel * 2, channel, kernel_size=1, stride=1, padding=0)
         self.Enhanceout0 = nn.Conv2d(channel * 2, channel, kernel_size, padding=1, padding_mode='replicate')
         self.Enhanceout1 = nn.Conv2d(channel * 4, channel, kernel_size, padding=1, padding_mode='replicate')
         self.Enhanceout2 = nn.Conv2d(channel, channel, kernel_size=1, stride=1, padding=0)
-
 
     def forward(self, input_img):
         out0 = self.Relu(self.Enhance_conv0_1(input_img))
@@ -406,18 +562,21 @@ class EnhanceModule0(nn.Module):
         out20 = self.Relu(self.conv18(out19))
         out21 = self.Relu(self.conv19(out20))
         up0 = self.Relu(self.Enhance_deconv0(torch.cat((down2, out21), dim=1)))
+        up0 = self.Relu(self.down_channel0(up0))
         out22 = self.Relu(self.conv20(torch.cat((up0, out16), dim=1)))
         out23 = self.Relu(self.conv21(out22))
         out24 = self.Relu(self.conv22(out23))
         out25 = self.Relu(self.conv23(out24))
         out26 = self.Relu(self.conv24(out25))
         up1 = self.Relu(self.Enhance_deconv1(torch.cat((up0, out26), dim=1)))
+        up1 = self.Relu(self.down_channel1(up1))
         out27 = self.Relu(self.conv25(torch.cat((up1, out11), dim=1)))
         out28 = self.Relu(self.conv26(out27))
         out29 = self.Relu(self.conv27(out28))
         out30 = self.Relu(self.conv28(out29))
         out31 = self.Relu(self.conv29(out30))
         up2 = self.Relu(self.Enhance_deconv2(torch.cat((up1, out31), dim=1)))
+        up2 = self.Relu(self.down_channel2(up2))
         out32 = self.Relu(self.Enhanceout0(torch.cat((out6, up2), dim=1)))
         up0_1 = F.interpolate(up0, size=(input_img.size()[2], input_img.size()[3]))
         up1_1 = F.interpolate(up1, size=(input_img.size()[2], input_img.size()[3]))
@@ -429,224 +588,28 @@ class EnhanceModule0(nn.Module):
         return Enhanced_I
 
 
-class EnhanceModule1(nn.Module):
-    def __init__(self, channel=64, kernel_size=3):
-        super(EnhanceModule1, self).__init__()
-
-        self.Max_pooling = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
-        self.Relu = nn.LeakyReLU()
-
-        self.Enhance_conv0_1 = nn.Conv2d(4, channel, kernel_size, padding=2, padding_mode='replicate', dilation=2)
-        self.Enhance_conv0_2 = nn.Conv2d(channel, channel, kernel_size, padding=2, padding_mode='replicate',
-                                         dilation=2)  # 96*96
-        self.conv0 = nn.Conv2d(channel, channel * 2, kernel_size=1, stride=1, padding=0)
-        self.conv1 = nn.Conv2d(channel * 2, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv2 = nn.Conv2d(channel * 4, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv3 = nn.Conv2d(channel * 4, channel * 2, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv4 = nn.Conv2d(channel * 2, channel, kernel_size=1, stride=1, padding=0)
-        #  maxpooling(torch.cat(conv0_input 64, conv4_output 64), dim=1))
-        self.conv5 = nn.Conv2d(channel * 2, channel * 2, kernel_size=1, stride=1, padding=0)  # input 128
-        self.conv6 = nn.Conv2d(channel * 2, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv7 = nn.Conv2d(channel * 4, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv8 = nn.Conv2d(channel * 4, channel * 2, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv9 = nn.Conv2d(channel * 2, channel, kernel_size=1, stride=1, padding=0)
-        #  maxpooling(torch.cat(conv5_input 128, conv9_output 64), dim=1))
-        self.conv10 = nn.Conv2d(channel * 3, channel * 2, kernel_size=1, stride=1, padding=0)  # input 192
-        self.conv11 = nn.Conv2d(channel * 2, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv12 = nn.Conv2d(channel * 4, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv13 = nn.Conv2d(channel * 4, channel * 2, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv14 = nn.Conv2d(channel * 2, channel, kernel_size=1, stride=1, padding=0)
-        #  maxpooling(torch.cat(conv10_input 192 conv14_output 64), dim=1))
-        self.conv15_0 = nn.Conv2d(channel * 4, channel * 2, kernel_size=1, stride=1, padding=0)  # input 256
-        self.conv16 = nn.Conv2d(channel * 2, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv17 = nn.Conv2d(channel * 4, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv18 = nn.Conv2d(channel * 4, channel * 2, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv19 = nn.Conv2d(channel * 2, channel, kernel_size=1, stride=1, padding=0)
-        self.Enhance_deconv0 = nn.ConvTranspose2d(channel * 5, channel, kernel_size=2, stride=2, padding=0,
-                                                  output_padding=0)  # 24*24
-        self.conv20 = nn.Conv2d(channel * 2, channel * 2, kernel_size=1, stride=1, padding=0)
-        self.conv21 = nn.Conv2d(channel * 2, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv22 = nn.Conv2d(channel * 4, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv23 = nn.Conv2d(channel * 4, channel * 2, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv24 = nn.Conv2d(channel * 2, channel, kernel_size=1, stride=1, padding=0)
-        self.Enhance_deconv1 = nn.ConvTranspose2d(channel * 2, channel, kernel_size=2, stride=2, padding=0,
-                                                  output_padding=0)  # 48*48
-        self.conv25 = nn.Conv2d(channel * 2, channel * 2, kernel_size=1, stride=1, padding=0)
-        self.conv26 = nn.Conv2d(channel * 2, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv27 = nn.Conv2d(channel * 4, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv28 = nn.Conv2d(channel * 4, channel * 2, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv29 = nn.Conv2d(channel * 2, channel, kernel_size=1, stride=1, padding=0)
-        self.Enhance_deconv2 = nn.ConvTranspose2d(channel * 2, channel, kernel_size=2, stride=2, padding=0,
-                                                  output_padding=0)  # 96*96
-
-        self.Enhanceout0 = nn.Conv2d(channel * 2, channel, kernel_size, padding=1, padding_mode='replicate')
-        self.Enhanceout1 = nn.Conv2d(channel, channel, kernel_size=1, stride=1, padding=0)
-
-
-    def forward(self, input_img):
-        out0 = self.Relu(self.Enhance_conv0_1(input_img))
-        out1 = self.Relu(self.Enhance_conv0_2(out0))
-        out2 = self.Relu(self.conv0(out1))
-        out3 = self.Relu(self.conv1(out2))
-        out4 = self.Relu(self.conv2(out3))
-        out5 = self.Relu(self.conv3(out4))
-        out6 = self.Relu(self.conv4(out5))
-        down0 = self.Relu(self.Max_pooling(torch.cat((out1, out6), dim=1)))
-        out7 = self.Relu(self.conv5(down0))
-        out8 = self.Relu(self.conv6(out7))
-        out9 = self.Relu(self.conv7(out8))
-        out10 = self.Relu(self.conv8(out9))
-        out11 = self.Relu(self.conv9(out10))
-        down1 = self.Relu(self.Max_pooling(torch.cat((down0, out11), dim=1)))
-        out12 = self.Relu(self.conv10(down1))
-        out13 = self.Relu(self.conv11(out12))
-        out14 = self.Relu(self.conv12(out13))
-        out15 = self.Relu(self.conv13(out14))
-        out16 = self.Relu(self.conv14(out15))
-        down2 = self.Relu(self.Max_pooling(torch.cat((down1, out16), dim=1)))
-        out17 = self.Relu(self.conv15_0(down2))
-        out18 = self.Relu(self.conv16(out17))
-        out19 = self.Relu(self.conv17(out18))
-        out20 = self.Relu(self.conv18(out19))
-        out21 = self.Relu(self.conv19(out20))
-        up0 = self.Relu(self.Enhance_deconv0(torch.cat((down2, out21), dim=1)))
-        out22 = self.Relu(self.conv20(torch.cat((up0, out16), dim=1)))
-        out23 = self.Relu(self.conv21(out22))
-        out24 = self.Relu(self.conv22(out23))
-        out25 = self.Relu(self.conv23(out24))
-        out26 = self.Relu(self.conv24(out25))
-        up1 = self.Relu(self.Enhance_deconv1(torch.cat((up0, out26), dim=1)))
-        out27 = self.Relu(self.conv25(torch.cat((up1, out11), dim=1)))
-        out28 = self.Relu(self.conv26(out27))
-        out29 = self.Relu(self.conv27(out28))
-        out30 = self.Relu(self.conv28(out29))
-        out31 = self.Relu(self.conv29(out30))
-        up2 = self.Relu(self.Enhance_deconv2(torch.cat((up1, out31), dim=1)))
-        out32 = self.Relu(self.Enhanceout0(torch.cat((out6, up2), dim=1)))
-        out33 = self.Relu(self.Enhanceout1(out32))
-        Enhanced_I = out33
-
-        return Enhanced_I
-
-
-class EnhanceModule2(nn.Module):
-    def __init__(self, channel=64, kernel_size=3):
-        super(EnhanceModule2, self).__init__()
-
-        self.Relu = nn.LeakyReLU()
-        self.Enhance_conv0_1 = nn.Conv2d(4, channel, kernel_size, padding=2, padding_mode='replicate', dilation=2)
-        self.Enhance_conv0_2 = nn.Conv2d(channel, channel, kernel_size, padding=2, padding_mode='replicate',
-                                         dilation=2)  # 96*96
-        self.conv0 = nn.Conv2d(channel, channel * 2, kernel_size=1, stride=1, padding=0)
-        self.conv1 = nn.Conv2d(channel * 2, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv2 = nn.Conv2d(channel * 4, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv3 = nn.Conv2d(channel * 4, channel * 2, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv4 = nn.Conv2d(channel * 2, channel, kernel_size=1, stride=1, padding=0)
-        self.Enhance_subsampling0 = nn.Conv2d(channel, channel, kernel_size=2, stride=2, padding=0)  # 48*48
-        self.conv5 = nn.Conv2d(channel, channel * 2, kernel_size=1, stride=1, padding=0)
-        self.conv6 = nn.Conv2d(channel * 2, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv7 = nn.Conv2d(channel * 4, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv8 = nn.Conv2d(channel * 4, channel * 2, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv9 = nn.Conv2d(channel * 2, channel, kernel_size=1, stride=1, padding=0)
-        self.Enhance_subsampling1 = nn.Conv2d(channel, channel, kernel_size=2, stride=2, padding=0)  # 24*24
-        self.conv10 = nn.Conv2d(channel, channel * 2, kernel_size=1, stride=1, padding=0)
-        self.conv11 = nn.Conv2d(channel * 2, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv12 = nn.Conv2d(channel * 4, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv13 = nn.Conv2d(channel * 4, channel * 2, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv14 = nn.Conv2d(channel * 2, channel, kernel_size=1, stride=1, padding=0)
-        self.Enhance_subsampling2 = nn.Conv2d(channel, channel, kernel_size=2, stride=2, padding=0)  # 12*12
-        self.conv15 = nn.Conv2d(channel, channel * 2, kernel_size=1, stride=1, padding=0)
-        self.conv16 = nn.Conv2d(channel * 2, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv17 = nn.Conv2d(channel * 4, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv18 = nn.Conv2d(channel * 4, channel * 2, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv19 = nn.Conv2d(channel * 2, channel, kernel_size=1, stride=1, padding=0)
-        self.Enhance_deconv0 = nn.ConvTranspose2d(channel, channel, kernel_size=2, stride=2, padding=0,
-                                                  output_padding=0)  # 24*24
-        self.conv20 = nn.Conv2d(channel, channel * 2, kernel_size=1, stride=1, padding=0)
-        self.conv21 = nn.Conv2d(channel * 2, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv22 = nn.Conv2d(channel * 4, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv23 = nn.Conv2d(channel * 4, channel * 2, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv24 = nn.Conv2d(channel * 2, channel, kernel_size=1, stride=1, padding=0)
-        self.Enhance_deconv1 = nn.ConvTranspose2d(channel, channel, kernel_size=2, stride=2, padding=0,
-                                                  output_padding=0)  # 48*48
-        self.conv25 = nn.Conv2d(channel, channel * 2, kernel_size=1, stride=1, padding=0)
-        self.conv26 = nn.Conv2d(channel * 2, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv27 = nn.Conv2d(channel * 4, channel * 4, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv28 = nn.Conv2d(channel * 4, channel * 2, kernel_size, stride=1, padding=1, padding_mode='replicate')
-        self.conv29 = nn.Conv2d(channel * 2, channel, kernel_size=1, stride=1, padding=0)
-        self.Enhance_deconv2 = nn.ConvTranspose2d(channel, channel, kernel_size=2, stride=2, padding=0,
-                                                  output_padding=0)  # 96*96
-
-        self.Enhanceout0 = nn.Conv2d(channel, channel, kernel_size, padding=1, padding_mode='replicate')
-        self.Enhanceout1 = nn.Conv2d(channel, channel, kernel_size=1, stride=1, padding=0)
-
-
-    def forward(self, input_img):
-        out0 = self.Relu(self.Enhance_conv0_1(input_img))
-        out1 = self.Relu(self.Enhance_conv0_2(out0))
-        out2 = self.Relu(self.conv0(out1))
-        out3 = self.Relu(self.conv1(out2))
-        out4 = self.Relu(self.conv2(out3))
-        out5 = self.Relu(self.conv3(out4))
-        out6 = self.Relu(self.conv4(out5))
-        down0 = self.Relu(self.Enhance_subsampling0(out6))
-        out7 = self.Relu(self.conv5(down0))
-        out8 = self.Relu(self.conv6(out7))
-        out9 = self.Relu(self.conv7(out8))
-        out10 = self.Relu(self.conv8(out9))
-        out11 = self.Relu(self.conv9(out10))
-        down1 = self.Relu(self.Enhance_subsampling1(out11))
-        out12 = self.Relu(self.conv10(down1))
-        out13 = self.Relu(self.conv11(out12))
-        out14 = self.Relu(self.conv12(out13))
-        out15 = self.Relu(self.conv13(out14))
-        out16 = self.Relu(self.conv14(out15))
-        down2 = self.Relu(self.Enhance_subsampling2(out16))
-        out17 = self.Relu(self.conv15(down2))
-        out18 = self.Relu(self.conv16(out17))
-        out19 = self.Relu(self.conv17(out18))
-        out20 = self.Relu(self.conv18(out19))
-        out21 = self.Relu(self.conv19(out20))
-        up0 = self.Relu(self.Enhance_deconv0(out21))
-        out22 = self.Relu(self.conv20(up0))
-        out23 = self.Relu(self.conv21(out22))
-        out24 = self.Relu(self.conv22(out23))
-        out25 = self.Relu(self.conv23(out24))
-        out26 = self.Relu(self.conv24(out25))
-        up1 = self.Relu(self.Enhance_deconv1(out26))
-        out27 = self.Relu(self.conv25(up1))
-        out28 = self.Relu(self.conv26(out27))
-        out29 = self.Relu(self.conv27(out28))
-        out30 = self.Relu(self.conv28(out29))
-        out31 = self.Relu(self.conv29(out30))
-        up2 = self.Relu(self.Enhance_deconv2(out31))
-        out32 = self.Relu(self.Enhanceout0(up2))
-        out33 = self.Relu(self.Enhanceout1(out32))
-        Enhanced_I = out33
-
-        return Enhanced_I
-
-
 class RelightNet(nn.Module):
     def __init__(self, channel=64, kernel_size=3):
         super(RelightNet, self).__init__()
         self.Relu = nn.LeakyReLU()
-        self.conv0 = nn.Conv2d(channel*3, channel, kernel_size, stride=1, padding=1, padding_mode='replicate')
+        self.out_act = nn.ReLU()
+        self.conv0 = nn.Conv2d(channel*2, channel, kernel_size, stride=1, padding=1, padding_mode='replicate')
         self.conv1 = nn.Conv2d(channel, 1, kernel_size=1, stride=1, padding=0)
         self.EnhanceModule0 = EnhanceModule0()
         self.EnhanceModule1 = EnhanceModule1()
-        self.EnhanceModule2 = EnhanceModule2()
 
     def forward(self, input_L, denoise_R):
         input_img = torch.cat((input_L, denoise_R), dim=1)
 
         out0 = self.EnhanceModule0(input_img)
         out1 = self.EnhanceModule1(input_img)
-        out2 = self.EnhanceModule2(input_img)
-        out3 = self.Relu(self.conv0(torch.cat((out0, out1, out2), dim=1)))
+        out3 = self.Relu(self.conv0(torch.cat((out0, out1), dim=1)))
 
-        output = self.Relu(self.conv1(out3))
+        output = self.out_act(self.conv1(out3))
         return output
+
+
+writer = SummaryWriter('./runs')
 
 
 class R2RNet(nn.Module):
@@ -659,7 +622,6 @@ class R2RNet(nn.Module):
         self.vgg = load_vgg16("./model")
 
     def forward(self, input_low, input_high):
-
 
         input_low = Variable(torch.FloatTensor(torch.from_numpy(input_low))).cuda()
         input_high = Variable(torch.FloatTensor(torch.from_numpy(input_high))).cuda()
@@ -687,21 +649,19 @@ class R2RNet(nn.Module):
                           self.recon_loss_high + \
                           0.1 * self.recon_loss_mutal_low + \
                           0.1 * self.recon_loss_mutal_high + \
-                          self.vgg_loss
+                          0.1 * self.vgg_loss
         # DenoiseNet_loss
         self.denoise_loss = F.l1_loss(denoise_R, R_high).cuda()
         self.denoise_vgg = compute_vgg_loss(denoise_R, R_high).cuda()
-        self.denoise_SSIM = 1 - ssim(denoise_R, R_high, win_size=3).cuda()
         self.loss_Denoise = self.denoise_loss + \
-                            self.denoise_SSIM + self.denoise_vgg
+                            0.1 * self.denoise_vgg
 
         # RelightNet_loss
-        self.SSIM_loss = 1 - ssim(denoise_R * I_delta_3, input_high, win_size=3).cuda()
         self.Relight_loss = F.l1_loss(denoise_R * I_delta_3, input_high).cuda()
         self.Relight_vgg = compute_vgg_loss(denoise_R * I_delta_3, input_high).cuda()
+        self.fre_loss = frequency_loss(denoise_R * I_delta_3, input_high).cuda()
 
-        self.loss_Relight = self.Relight_loss + \
-                            self.SSIM_loss + self.Relight_vgg
+        self.loss_Relight = self.Relight_loss + 0.1 * self.Relight_vgg + 0.01 * self.fre_loss
 
         self.output_R_low = R_low.detach().cpu()
         self.output_I_low = I_low_3.detach().cpu()
@@ -731,14 +691,17 @@ class R2RNet(nn.Module):
         return torch.mean(self.gradient(input_I, "x") * torch.exp(-10 * self.ave_gradient(input_R, "x")) +
                           self.gradient(input_I, "y") * torch.exp(-10 * self.ave_gradient(input_R, "y")))
 
-    def evaluate(self, epoch_num, eval_low_data_names, vis_dir, train_phase):
+    def evaluate(self, epoch_num, eval_low_data_names, eval_high_data_names, vis_dir, train_phase):
         print("Evaluating for phase %s / epoch %d..." % (train_phase, epoch_num))
+        psnr = 0
         with torch.no_grad():# Otherwise the intermediate gradient would take up huge amount of CUDA memory
             for idx in range(len(eval_low_data_names)):
                 eval_low_img = Image.open(eval_low_data_names[idx])
-                eval_low_img = np.array(eval_low_img, dtype="float32")/255.0
-                eval_low_img = np.transpose(eval_low_img, (2, 0, 1))
+                eval_low_img = np.array(eval_low_img, dtype="float32") / 255.0
+                eval_low_img = np.transpose(eval_low_img, [2, 0, 1])
                 input_low_eval = np.expand_dims(eval_low_img, axis=0)
+                eval_high_img = Image.open(eval_high_data_names[idx])
+                eval_high_img = np.array(eval_high_img, dtype="float32")
 
                 if train_phase == "Decom":
                     self.forward(input_low_eval, input_low_eval)
@@ -747,33 +710,27 @@ class R2RNet(nn.Module):
                     input = np.squeeze(input_low_eval)
                     result_1 = np.squeeze(result_1)
                     result_2 = np.squeeze(result_2)
-                    cat_image = np.concatenate([input, result_1, result_2], axis=2)
+                    cat_image = np.concatenate([result_1, result_2], axis=2)
                 if train_phase == 'Denoise':
                     self.forward(input_low_eval, input_low_eval)
                     result_1 = self.output_R_denoise
                     input = np.squeeze(input_low_eval)
-                    result_1 = np.squeeze(result_1)
-                    cat_image = np.concatenate([input, result_1], axis=2)
+                    result_1 = result_1.numpy().squeeze(0)
+                    cat_image = result_1
                 if train_phase == "Relight":
                     self.forward(input_low_eval, input_low_eval)
-                    result_1 = self.output_R_denoise
-                    result_2 = self.output_I_low
-                    result_3 = self.output_I_delta
                     result_4 = self.output_S
                     input = np.squeeze(input_low_eval)
-                    result_1 = np.squeeze(result_1)
-                    result_2 = np.squeeze(result_2)
-                    result_3 = np.squeeze(result_3)
-                    result_4 = np.squeeze(result_4)
-                    cat_image = np.concatenate([input, result_1, result_2, result_3, result_4], axis=2)
+                    result_4 = result_4.numpy().squeeze(0)
+                    cat_image = result_4
 
                 cat_image = np.transpose(cat_image, (1, 2, 0))
-                # print(cat_image.shape)
+            # print(cat_image.shape)
                 im = Image.fromarray(np.clip(cat_image * 255.0, 0, 255.0).astype('uint8'))
-                filepath = os.path.join(vis_dir, 'eval_%s_%d_%d.png' %
-                           (train_phase, idx + 1, epoch_num))
-                im.save(filepath[:-4] + '.jpg')
-
+                im_test = np.array(im, dtype='float32')
+                psnr += psnr2(im_test, eval_high_img)
+            print('psnr=', psnr / len(eval_low_data_names))
+            writer.add_scalar('runs/psnr', psnr / len(eval_low_data_names), epoch_num)
 
     def save(self, iter_num, ckpt_dir):
         save_dir = ckpt_dir + '/' + self.train_phase + '/'
@@ -814,6 +771,7 @@ class R2RNet(nn.Module):
               train_low_data_names,
               train_high_data_names,
               eval_low_data_names,
+              eval_high_data_names,
               batch_size,
               patch_size, epoch,
               lr,
@@ -902,34 +860,43 @@ class R2RNet(nn.Module):
                         random.shuffle(list(tmp))
                         train_low_data_names, train_high_data_names = zip(*tmp)
 
-
                 # Feed-Forward to the network and obtain loss
                 self.forward(self.input_low,  self.input_high)
                 if self.train_phase == "Decom":
                     self.train_op_Decom.zero_grad()
                     self.loss_Decom.backward()
                     self.train_op_Decom.step()
+                    global_step += 1
                     loss = self.loss_Decom.item()
                 if self.train_phase == 'Denoise':
                     self.train_op_Denoise.zero_grad()
                     self.loss_Denoise.backward()
                     self.train_op_Denoise.step()
+                    global_step += 1
                     loss = self.loss_Denoise.item()
                 elif self.train_phase == "Relight":
                     self.train_op_Relight.zero_grad()
                     self.loss_Relight.backward()
                     self.train_op_Relight.step()
+                    global_step += 1
                     loss = self.loss_Relight.item()
 
                 print("%s Epoch: [%2d] [%4d/%4d] time: %4.4f, loss: %.6f"
                       % (train_phase, epoch + 1, batch_id + 1, numBatch, time.time() - start_time, loss))
                 iter_num += 1
+                writer.add_scalar('runs/loss', loss, global_step)
+                img = torch.rand(3, 3, 96, 96).numpy()
+                if global_step % 10 == 0:
+                    img[:1, :, :, :] = batch_input_low[:1, :, :, :]
+                    img[1:2, :, :, :] = self.output_S[:1, :, :, :]
+                    img[2:3, :, :, :] = batch_input_high[:1, :, :, :]
+                    writer.add_images('results', img)
 
             # Evaluate the model and save a checkpoint file for it
             if (epoch + 1) % eval_every_epoch == 0:
-                self.evaluate(epoch + 1, eval_low_data_names,
-                              vis_dir=vis_dir, train_phase=train_phase)
                 self.save(iter_num, ckpt_dir)
+                self.evaluate(epoch + 1, eval_low_data_names, eval_high_data_names,
+                              vis_dir=vis_dir, train_phase=train_phase)
 
         print("Finished training for phase %s." % train_phase)
 
