@@ -13,7 +13,7 @@ The proposed Relight-Net architecture. The Relight-Net consists of two modules: 
 This is a Pytorch implementation of R2RNet.
 ## Requirements
 1. Python 3.x 
-2. Pytorch 1.x.0
+2. Pytorch = 1.9.0
 ## Dataset
 You can download the LSRW dataset from: https://pan.baidu.com/s/1UxFllrtRSh4E8ir8LdTb9w (code: wmr1) 
 If you use our code and  dataset, please cite our paper.
