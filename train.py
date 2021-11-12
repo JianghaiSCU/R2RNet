@@ -17,7 +17,7 @@ parser.add_argument('--patch_size', dest='patch_size', type=int, default=96,
 parser.add_argument('--lr', dest='lr', type=float, default=0.0001,
                     help='initial learning rate')
 parser.add_argument('--data_dir', dest='data_dir',
-                    default=r'E:\Our dataset\Train',
+                    default=r'/media/jianghai/9EB6799CB679759D1/Our dataset/Train/Training data',
                     help='directory storing the training data')
 parser.add_argument('--ckpt_dir', dest='ckpt_dir', default='./ckpts/',
                     help='directory for checkpoints')
@@ -35,17 +35,20 @@ def train(model):
 
     train_low_data_names.sort()
     train_high_data_names = glob(args.data_dir + '/Huawei/high/*.jpg') + \
-                           glob(args.data_dir + '/Nikon/high/*.jpg')
+                            glob(args.data_dir + '/Nikon/high/*.jpg') 
+
     train_high_data_names.sort()
-    eval_low_data_names = glob(args.data_dir + '/eval50/low/*.*')
+    eval_low_data_names = glob('./data/eval/low/*.png')
     eval_low_data_names.sort()
+    eval_high_data_names = glob('./data/eval/high/*.png')
+    eval_high_data_names.sort()
     assert len(train_low_data_names) == len(train_high_data_names)
     print('Number of training data: %d' % len(train_low_data_names))
-
 
     model.train(train_low_data_names,
                 train_high_data_names,
                 eval_low_data_names,
+                eval_high_data_names,
                 batch_size=args.batch_size,
                 patch_size=args.patch_size,
                 epoch=args.epochs,
@@ -58,6 +61,7 @@ def train(model):
     model.train(train_low_data_names,
                 train_high_data_names,
                 eval_low_data_names,
+                eval_high_data_names,
                 batch_size=args.batch_size,
                 patch_size=args.patch_size,
                 epoch=args.epochs,
@@ -70,6 +74,7 @@ def train(model):
     model.train(train_low_data_names,
                 train_high_data_names,
                 eval_low_data_names,
+                eval_high_data_names,
                 batch_size=args.batch_size,
                 patch_size=args.patch_size,
                 epoch=args.epochs,
