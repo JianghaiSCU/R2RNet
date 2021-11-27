@@ -18,7 +18,8 @@ This is a Pytorch implementation of R2RNet.
 You can download the LSRW dataset from: https://pan.baidu.com/s/1UxFllrtRSh4E8ir8LdTb9w (code: wmr1) 
 If you use our code and  dataset, please cite our paper.
 ## Pre-trained model
-You can download pre-trained models from：https://pan.baidu.com/s/1fYBAvzCuuzmaFmDDAlsCWA (code: wmr1), then put the pre-trained models into Decom, Denoise, Relight, respectively. The pre-trained VGG-16 model can be downloaded from:https://pan.baidu.com/s/1kf1uLjLaAMbfji0fPZKtEQ (code: wmrr).
+You can download pre-trained models from：https://pan.baidu.com/s/1fYBAvzCuuzmaFmDDAlsCWA (code: wmr1), then put the pre-trained models into Decom, Denoise, Relight, respectively. 
+The pre-trained VGG-16 model can be downloaded from:https://pan.baidu.com/s/1kf1uLjLaAMbfji0fPZKtEQ (code: wmrr).
 ## Testing Usage
 python predict.py
 ## Training Usage
