@@ -1,6 +1,6 @@
 # Update!!!
 # R2RNet
-Official code of "R2RNet: Low-light Image Enhancement via Real-low to Real-normal Network." Jiang Hai, Zhu Xuan, Ren Yang, Yutong Hao, Fengzhu Zou, Fang Lin, and Songchen Han(Submitted to IEEE transaction on Image Processing)
+Official code of "R2RNet: Low-light Image Enhancement via Real-low to Real-normal Network." Jiang Hai, Zhu Xuan, Ren Yang, Yutong Hao, Fengzhu Zou, Fang Lin, and Songchen Han
 
 Paper link: https://arxiv.org/abs/2106.14501
 ## Network Architecture
