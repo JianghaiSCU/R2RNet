@@ -16,6 +16,8 @@ This is a Pytorch implementation of R2RNet.
 ## Dataset
 We have fixed the image naming bugs, you can download the LSRW dataset from: https://pan.baidu.com/s/1XHWQAS0ZNrnCyZ-bq7MKvA (code: wmrr) 
 
+##Note: Some outdoor image pairs are not pixel-to-pixel aligned, there may be some local offsets between two images, Therefore, we recommend using non-reference evaluation metrics for these images. 
+
 If you use our code and  dataset, please cite our paper.
 ## Pre-trained model
 You can download pre-trained models from：https://pan.baidu.com/s/1fYBAvzCuuzmaFmDDAlsCWA (code: wmr1), then put the pre-trained models into Decom, Denoise, Relight, respectively. 
