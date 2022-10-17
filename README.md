@@ -16,7 +16,7 @@ This is a Pytorch implementation of R2RNet.
 ## Dataset
 We have fixed the image naming bugs, you can download the LSRW dataset from: https://pan.baidu.com/s/1XHWQAS0ZNrnCyZ-bq7MKvA (code: wmrr) 
 
-## Note: Some outdoor image pairs are not pixel-to-pixel aligned, there may be some local offsets between two images. Therefore, we recommend using non-reference evaluation metrics for these images. 
+### Note: Some outdoor image pairs are not pixel-to-pixel aligned, there may be some local offsets between two images. In fact, we think that this has a limited impact on the LLIE task. If you think it has a great impact on your task, please choose the appropriate training strategy and evaluation metric by yourself
 
 If you use our code and  dataset, please cite our paper.
 ## Pre-trained model
