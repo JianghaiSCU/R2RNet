@@ -12,13 +12,11 @@ The proposed Relight-Net architecture. The Relight-Net consists of two modules: 
 This is a Pytorch implementation of R2RNet.
 ## Requirements
 1. Python 3.x 
-2. Pytorch == 1.9.0 (We used torch.fft.fftn(ifftn) and torch.fft.rfftn(irfftn) in our code)
+2. Pytorch == 1.9.0 (We used torch.fft.fftn(ifftn) and torch.fft.rfftn(irfftn) in our code). 
 ## Dataset
-We have fixed the image naming bugs, you can download the LSRW dataset from: https://pan.baidu.com/s/1XHWQAS0ZNrnCyZ-bq7MKvA (code: wmrr) 
-
+We have fixed the image naming bugs, you can download the LSRW dataset from: https://pan.baidu.com/s/1XHWQAS0ZNrnCyZ-bq7MKvA (code: wmrr). If you use our code and  dataset, please cite our paper.
 ### Note: Some outdoor image pairs are not pixel-to-pixel aligned, there may be some local offsets between two images. In fact, we think that this has a limited impact on the LLIE task. If you think it has a great impact on your task, please choose the appropriate training strategy and evaluation metric by yourself
 
-If you use our code and  dataset, please cite our paper.
 ## Pre-trained model
 You can download pre-trained models from：https://pan.baidu.com/s/1fYBAvzCuuzmaFmDDAlsCWA (code: wmr1), then put the pre-trained models into Decom, Denoise, Relight, respectively. 
 
