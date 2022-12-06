@@ -1,18 +1,7 @@
 # R2RNet
 Official code of "R2RNet: Low-light Image Enhancement via Real-low to Real-normal Network." Jiang Hai, Zhu Xuan, Ren Yang, Yutong Hao, Fengzhu Zou, Fang Lin, and Songchen Han
 
-Paper link: https://arxiv.org/abs/2106.14501 (https://www.sciencedirect.com/science/article/pii/S1047320322002322)
-
-### Citation:
-```
-@article{R2RNet,
-title = {R2RNet: Low-light image enhancement via Real-low to Real-normal Network},
-journal = {Journal of Visual Communication and Image Representation},
-volume = {90},
-pages = {103712},
-year = {2023}
-}
-```
+Paper link: https://arxiv.org/abs/2106.14501
 
 ## Network Architecture
 ![fig3](https://user-images.githubusercontent.com/86350392/141397717-abff2d12-e810-4744-96e2-a1ce6af87002.jpeg)
