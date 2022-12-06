@@ -1,7 +1,19 @@
 # R2RNet
 Official code of "R2RNet: Low-light Image Enhancement via Real-low to Real-normal Network." Jiang Hai, Zhu Xuan, Ren Yang, Yutong Hao, Fengzhu Zou, Fang Lin, and Songchen Han
 
-Paper link: https://arxiv.org/abs/2106.14501
+Paper link: https://arxiv.org/abs/2106.14501 (https://www.sciencedirect.com/science/article/pii/S1047320322002322)
+
+### Citation:
+```
+@article{R2RNet,
+title = {R2RNet: Low-light image enhancement via Real-low to Real-normal Network},
+journal = {Journal of Visual Communication and Image Representation},
+volume = {90},
+pages = {103712},
+year = {2023}
+}
+```
+
 ## Network Architecture
 ![fig3](https://user-images.githubusercontent.com/86350392/141397717-abff2d12-e810-4744-96e2-a1ce6af87002.jpeg)
 The proposed R2RNet architecture. Our network consists of three subnets: a Decom-Net, a Denoise-Net, and a Enhance-Net, which perform decomposing, denoising, contrast enhancement and detail preservation, respectively. The Decom-Net decomposes the low-light image into an illumination map and a reflectance map based on the Retinex theory. The Denoise-Net aims to suppress the noise in the reflectance map. Subsequently, the illumination map obtained by Decom-Net and the reflectance map obtained by Denoise-Net are sent to the Relight-Net to improve image contrast and reconstruct details.
